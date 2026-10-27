@@ -1,0 +1,76 @@
+# SSH Hardening on AWS EC2 Ubuntu
+
+## 1. Generate SSH Key Pair on Local Ubuntu
+
+# Create an Ed25519 key pair
+ssh-keygen -t ed25519 -C "deploy-ec2" -f ~/.ssh/aws_deploy_ed25519
+
+# Check generated keys
+ls -l ~/.ssh/aws_deploy_ed25519*
+
+# Set private key permissions
+chmod 600 ~/.ssh/aws_deploy_ed25519
+
+## 2. Copy Public Key to VPS
+
+# Copy the public key to the deploy user's authorized_keys
+cat ~/.ssh/aws_deploy_ed25519.pub | ssh -i ~/Downloads/Oct27.pem ubuntu@16.178.73.16 'sudo install -d -m 700 -o deploy -g deploy /home/deploy/.ssh && sudo tee -a /home/deploy/.ssh/authorized_keys >/dev/null && sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys && sudo chmod 600 /home/deploy/.ssh/authorized_keys'
+
+## 3. Verify SSH Key Authentication
+
+# Connect to the VPS as deploy using the new private key
+ssh -i ~/.ssh/aws_deploy_ed25519 deploy@16.178.73.16
+
+# Verify current user (run on the VPS)
+whoami
+
+# Verify home directory (run on the VPS)
+echo "$HOME"
+
+## 4. Verify SSH Directory and Public Key Permissions
+
+# Inspect the SSH directory (run on the VPS)
+sudo ls -la /home/deploy/.ssh
+
+# Verify authorized_keys ownership and permissions
+sudo stat -c '%U:%G %a %n' /home/deploy/.ssh/authorized_keys
+
+## 5. Back Up SSH Server Configuration
+
+# Back up the original SSH configuration (run on the VPS)
+sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
+
+## 6. Configure SSH Hardening
+
+# Edit the SSH server configuration
+sudo nano /etc/ssh/sshd_config
+
+# Add or configure the following directives:
+PermitRootLogin no
+PasswordAuthentication no
+
+## 7. Validate SSH Configuration
+
+# Check SSH configuration syntax
+sudo sshd -t
+
+# Verify effective SSH authentication settings
+sudo sshd -T | grep -E '^(permitrootlogin|passwordauthentication|pubkeyauthentication) '
+
+# Expected results:
+# permitrootlogin no
+# pubkeyauthentication yes
+# passwordauthentication no
+
+## 8. Restart SSH Service
+
+# Restart the SSH service (run on the VPS)
+sudo systemctl restart ssh
+
+## 9. Verify Root Login Is Rejected
+
+# Run on the local Ubuntu machine
+ssh -i ~/Downloads/Oct27.pem root@16.178.73.16
+
+# Expected result:
+# root@16.178.73.16: Permission denied (publickey).
